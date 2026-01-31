@@ -5,6 +5,7 @@ from core.config import GOOGLE_API_KEY
 class CustomEcommerceAgent:
     def __init__(self):
         self.client = genai.Client(api_key=GOOGLE_API_KEY)
+    
         self.model_name = "gemini-3-flash-preview" 
 
     def run(self, query):
@@ -12,39 +13,37 @@ class CustomEcommerceAgent:
         Returns: 
         1. recommendation_text (str)
         2. main_raw_data (json/str)
-        3. accessory_list (list of strings, e.g. ["Laptop Bag", "Wireless Mouse"])
+        3. accessory_list (list)
         """
-        # 1. Fetch MAIN product data
-        try:
-            raw_data = get_live_products(query)
-        except Exception as e:
-            raw_data = f"Error fetching data: {str(e)}"
-
-        # 2. Prompt with Strict Separation for Accessories
+        
+        # 1. Prompt with Guardrails
+        # We perform the check INSIDE the prompt instructions
         prompt = f"""
-        You are an expert Shopping Assistant.
+        You are a specialized E-Commerce Shopping Assistant.
         
-        USER REQUEST: {query}
-        MARKET DATA: {raw_data}
+        USER REQUEST: "{query}"
         
-        INSTRUCTIONS:
-        1. Analyze the market data and provide a recommendation.
-        2. Identify exactly 2 related accessories that go with this product.
-           (e.g. if Laptop -> "Laptop Bag", "Wireless Mouse")
+        STRICT OFF-TOPIC RULE:
+        If the user request is NOT related to buying products, comparing prices, or looking for shopping advice (e.g., "Who is the president?", "Write code for me", "How to cook"), you must REFUSE.
         
-        STRICT OUTPUT FORMAT:
-        Write your recommendation text first.
-        Then, end your response with exactly this line:
+        If Refusing:
+        - Output exactly: "I am designed to help with shopping and product comparisons only. Please ask me about a product!"
+        - Do NOT output the ---ACCESSORIES--- section.
+        
+        If Shopping Related:
+        1. I have provided market data below. Analyze it and give a recommendation.
+        2. Identify exactly 2 related accessories.
+        
+        MARKET DATA: 
+        {get_live_products(query)} 
+        
+        STRICT OUTPUT FORMAT (For Shopping Queries Only):
+        [Your Recommendation Text]
         ---ACCESSORIES---
-        Followed by the 2 accessory names separated by a comma.
-        
-        Example End of Response:
-        ...so option A is the best choice.
-        ---ACCESSORIES---
-        Laptop Backpack, Wireless Gaming Mouse
+        [Accessory 1], [Accessory 2]
         """
 
-        # 3. Call Gemini
+        # 2. Call Gemini
         try:
             response = self.client.models.generate_content(
                 model=self.model_name,
@@ -52,20 +51,26 @@ class CustomEcommerceAgent:
             )
             full_text = response.text
             
-            # 4. PARSING LOGIC (Mind Separation)
-            # We split the text to separate the "Advice" from the "Data"
+            # 3. Parsing Logic
+            # Case A: Shopping Query (Has accessories)
             if "---ACCESSORIES---" in full_text:
                 parts = full_text.split("---ACCESSORIES---")
                 recommendation = parts[0].strip()
-                # Create a clean list: ["Backpack", "Mouse"]
                 accessories_text = parts[1].strip()
                 accessory_list = [item.strip() for item in accessories_text.split(",")]
+               
+                # Let's do it efficiently:
+                raw_data = get_live_products(query) 
+
+            # Case B: Off-Topic (No accessories section)
             else:
-                recommendation = full_text
-                accessory_list = []
-                
+                recommendation = full_text # Contains the "I am designed..." refusal
+                raw_data = None # No cards to show
+                accessory_list = [] # No accessories to show
+
         except Exception as e:
             recommendation = f"Gemini Error: {str(e)}"
+            raw_data = None
             accessory_list = []
         
         return recommendation, raw_data, accessory_list
