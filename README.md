@@ -17,9 +17,7 @@
 
 ## 🎥 Live Demo
 
-> *Streamlit Cloud demo (dummy link for now)*
-
-[![Streamlit Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-streamlit-demo-link.streamlit.app)
+[![Streamlit Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://e-commerce-assistant-nohwquggh8fgjmbe7pm2uj.streamlit.app/)
 
 ---
 
